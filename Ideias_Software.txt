@@ -1,0 +1,63 @@
+1. Desenvolvimento do Site
+    Backend (para receber e processar os arquivos):
+
+    Framework recomendado: Flask (Python) ou Express (Node.js).
+
+    Função: O backend do site vai permitir que o usuário faça o upload de arquivos .txt, .pdf ou .docx e o servidor vai processar esses arquivos para extrair as informações.
+
+    Bibliotecas úteis para extração de texto:
+
+    Para .txt: Python tem suporte nativo com a função open().
+
+    Para .pdf: Use a biblioteca PyPDF2 ou pdfplumber.
+
+    Para .docx: A biblioteca python-docx pode ser usada para extrair texto de arquivos Word.
+
+2. Processamento de Texto
+Agora que você tem o texto extraído dos arquivos, o que você quer fazer com ele? Aqui estão algumas opções de processamento:
+
+    Busca de palavras-chave: Pode usar expressões regulares ou técnicas mais avançadas com bibliotecas como spaCy ou NLTK.
+
+    Análise semântica: Para tarefas mais complexas (como identificar sentimentos ou categorias de texto), pode usar o spaCy ou integrar com APIs de NLP (Processamento de Linguagem Natural) como a da OpenAI ou do Google Cloud Natural Language.
+
+3. Enviando os Dados para a Raspberry Pi
+
+    Usando HTTP (API RESTful):
+
+    O site pode se comunicar com a Raspberry Pi usando requisições HTTP. No backend do site (Flask/Express), você envia uma requisição HTTP POST para a Raspberry Pi sempre que um arquivo for processado.
+
+    Raspberry Pi: Um servidor simples em Python ou Node.js pode receber esses dados e processá-los.
+
+    Exemplo básico de comunicação:
+
+        1-Backend do Site: Quando o usuário envia o arquivo, o backend processa o arquivo e envia as informações via HTTP para a Raspberry Pi.
+        2-Servidor na Raspberry Pi: No lado da Raspberry Pi, você pode usar Flask (Python) para criar um servidor simples para receber os dados via HTTP.
+    Dicas para testar na Raspberry Pi:
+
+        Verifique o IP da sua Raspberry Pi na rede local.
+
+        Abra a porta 5000 para permitir conexões (caso tenha firewall configurado).
+
+4. Configuração do Wi-Fi na Raspberry Pi
+    Para garantir que a Raspberry Pi possa se conectar ao seu Wi-Fi:
+
+    Conecte a Raspberry Pi ao Wi-Fi:
+        -Na interface gráfica (se você tiver monitor/teclado), vá para as configurações de rede e conecte-se ao Wi-Fi.
+        -Caso não tenha interface gráfica, edite o arquivo /etc/wpa_supplicant/wpa_supplicant.conf para configurar a rede:
+
+    network={
+        ssid="NOME_DA_REDE"
+        psk="SENHA"
+    }
+
+    Verifique o IP:
+        -Execute hostname -I para descobrir o IP da Raspberry Pi na rede local. Esse é o IP que você vai usar para enviar os dados.
+
+5. Testes e Implementação
+
+    Faça o upload de um arquivo no site.
+
+    O backend do site processa e envia os dados para a Raspberry Pi via HTTP.
+
+    A Raspberry Pi recebe os dados e você pode realizar a computação desejada (por exemplo, processar e exibir ou salvar os resultados).
+
