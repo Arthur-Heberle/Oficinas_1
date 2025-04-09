@@ -59,7 +59,35 @@
         ssid="NOME_DA_REDE"
         psk="SENHA"
     }
+4.Auto-Falante:
 
+    import time
+    import subprocess
+    
+    with open("exemplo.txt", "r") as f:
+        texto = f.read()
+    
+    for letra in texto:
+        if letra.isalpha():
+            subprocess.run(["espeak", letra])
+            time.sleep(0.5)  # Espera meio segundo entre letras
+    ------------------------------------------------------------
+    a) espeak (leve e direto):
+    
+        sudo apt update
+        sudo apt install espeak
+        E pra falar uma letra:
+    
+            espeak "A"
+        
+    b) flite (também leve):
 
+        sudo apt install flite
+        flite -t "A"
+        
+    c) pico2wave (voz mais natural):
+   
+        sudo apt install libttspico-utils
+        pico2wave -w temp.wav "A" && aplay temp.wav
 
 '''
