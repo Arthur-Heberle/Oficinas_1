@@ -1,0 +1,29 @@
+from flask import Flask, request, jsonify
+import PyPDF2, docx, os
+
+app = Flask(__name__)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files['file']
+    text = ""
+    
+    if file.filename.endswith('.pdf'):
+        reader = PyPDF2.PdfReader(file)
+        text = " ".join([page.extract_text() for page in reader.pages])
+    elif file.filename.endswith('.docx'):
+        doc = docx.Document(file)
+        text = " ".join([para.text for para in doc.paragraphs])
+    else:  # .txt
+        text = file.read().decode('utf-8')
+    
+    braille_text = convert_to_braille(text)  # Função de conversão (ver abaixo)
+    return jsonify({"braille": braille_text})
+
+def convert_to_braille(text):
+    # Implemente a conversão para Braille aqui (mapeamento de caracteres)
+    braille_dict = {'a': '⠁', 'b': '⠃', ...}  # Dicionário completo necessário
+    return ''.join([braille_dict.get(c.lower(), '') for c in text])
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
