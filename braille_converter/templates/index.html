@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Braille Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Braille Converter</h1>
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".docx,.pdf,.txt" required>
+            <button type="submit">Convert to Braille</button>
+        </form>
+        {% if message %}
+        <div class="message">{{ message }}</div>
+        {% endif %}
+    </div>
+    <div class="container">
+        <!-- <h1>Run</h1> -->
+        <form method="POST" action="/run">
+            
+            <input type="number" id="quantity" name="quantity" placeholder="Type the time to run" min="0.01" max="2" step="0.01" value="0.5">
+            <button type="submit">Run</button>
+        </form>
+        {% if message %}
+        <div class="message">{{ message }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
