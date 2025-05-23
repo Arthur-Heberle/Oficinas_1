@@ -12,14 +12,12 @@
 '''-----------------------------------------------------------------------'''
 
 
-
-
 from flask import Flask, render_template, request
 import os
 import requests
+from gtts import gTTS
 from docx import Document
 import PyPDF2
-
 app = Flask(__name__)
 app.secret_key = "Heberle2023"
 
@@ -37,7 +35,9 @@ PDF text extraction quality depends on the PDF structure
 '''
 
 # Configure your Pi's IP and port
-PI_IP = "192.168.43.170"
+# PI_IP = "192.168.43.170" #Rafael
+PI_IP = "192.168.150.221"
+
 # PI_IP = "10.5.0.44"
 PI_PORT = "5000"
 PI_ENDPOINT = f"http://{PI_IP}:{PI_PORT}/"
@@ -90,6 +90,19 @@ def get_words(text):
             words.append(j)
     return words    
 
+def create_text_audio(text):
+    try:
+        tts = gTTS(text=text, lang="pt")
+        tts.save("static/outputTEXT.mp3")
+    except  Exception as e:
+        print(f'Error when trying to create text audio: \n {str(e)}')
+
+def destoy_text_audio():
+    try:
+        os.remove("static/outputTEXT.mp3")
+    except Exception as e:
+        print(f'Error when trying to destroy text audio: \n {str(e)}')
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -120,7 +133,8 @@ def upload_file():
 
         text = text.lower()
         words = get_words(text)
-
+        create_text_audio(text)
+        
         new_file = 'my_' + temp_path[8:].split('.')[0] + '.txt'
         
         os.remove(temp_path)
@@ -147,17 +161,19 @@ def run_text():
         try:
             time = float(time_str)
         except ValueError:
-            return render_template('index.html', message="Invalid time value.")
+            return render_template('index.html', message2="Invalid time value.")
         
         response = requests.post(PI_ENDPOINT+PI_ROUTE_RUN, json= {'time': time})
 
         if response.status_code == 200:
-            return render_template('index.html', message="Text Runned!")
+            return render_template('index.html', message2="Text Runned!")
         else:
-            return render_template('index.html', message="Error sending to Raspberry Pi")
+            return render_template('index.html', message2="Error sending to Raspberry Pi")
         
     except Exception as e:
-        return render_template('index.html', message=f"Error: {str(e)}")
-                    
+        return render_template('index.html', message2=f"Error: {str(e)}")
+    finally:
+        destoy_text_audio()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)

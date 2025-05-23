@@ -14,13 +14,15 @@
 '''-----------------------------------------------------------------------'''
 
 
+# ===== Imports ===== #
+
 from flask import Flask, request
-from gpiozero import MCP3008
-import pyttsx3
+import threading
+# import pyttsx3
 import RPi.GPIO as GPIO
+from smbus2 import SMBus
 import time,os
 from gtts import gTTS
-# from playsound import playsound
 import pygame
 from unidecode import unidecode
 
@@ -28,11 +30,10 @@ from unidecode import unidecode
 #                  CONSTANTS                    #
 #-----------------------------------------------#
 
-VELPAR = 0.15
-VELMIN = 0.3
-VELMAX = 2
-ANGLE = 20
-SLEEP_DURATION = 0.3
+VEL_STEP = 0.10
+TIMEMIN = 0.1
+TIMEMAX = 3
+ANGLE = 45
 
 PIN1 = 18
 PIN2 = 23
@@ -42,16 +43,33 @@ PIN5 = 12
 PIN6 = 13
 PINS = [PIN1, PIN2, PIN3, PIN4, PIN5, PIN6]
 
-BUTTON_RAISE_VEL = 3
-BUTTON_REDUCE_VEL = 2
-BUTTON_PAUSE = 17
-BUTTON_REPLAY_WORD = 4
-BUTTONS = [BUTTON_RAISE_VEL, BUTTON_REDUCE_VEL,
-           BUTTON_PAUSE, BUTTON_REPLAY_WORD ]
+RAISE_VEL_BUTTON = 27
+REDUCE_VEL_BUTTON = 22
+PAUSE_BUTTON = 19
+REPLAY_WORD_BUTTON = 17
+BUTTONS = [RAISE_VEL_BUTTON, REDUCE_VEL_BUTTON,
+           PAUSE_BUTTON, REPLAY_WORD_BUTTON ]
+
+# === Potenciometer Constants === #
+I2C_BUS = 1
+ADDRESS = 0x48  # Endereço do ADS1115
+
+# Ponteiros de registrador
+POINTER_CONVERSION = 0x00
+POINTER_CONFIG     = 0x01
 
 #-----------------------------------------------#
 #              SETUP CONFIGURATION              #
 #-----------------------------------------------#
+
+lock = threading.Lock()   # This is responsible to use 
+index = 0                 # interruption in the buttons
+time_delay = 0.5                # and to play the words
+paused = False
+back_word = False
+
+pygame.init()
+pygame.mixer.init()
 
 GPIO.setmode(GPIO.BCM)       
 GPIO.setwarnings(False)
@@ -63,8 +81,6 @@ PWMS = [GPIO.PWM(pin, 50) for pin in PINS]  # Create PWM instance with 50Hz (typ
 
 for button in BUTTONS:
     GPIO.setup(button, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-pot = MCP3008(channel=0) # Responsible to convert potenciometer signal
 
 BRAILLE_ALPHA = {
     'a': [1 , 0,
@@ -328,6 +344,7 @@ def start_pwms():
 
 def stop_pwms():
     for pwm in PWMS:
+        pwm.ChangeDutyCycle(0)
         pwm.stop()
         time.sleep(0.01)
 
@@ -339,25 +356,83 @@ def reset_pwms():
 def turn(pwm, angle):
     duty = 2 + (angle / 18)
     pwm.ChangeDutyCycle(duty)
-    # time.sleep(0.3)  # Time to servo motor turn
-
-def clean_pwm_duty(pwm):  
+    time.sleep(0.2)  # Time to servo motor turn
     pwm.ChangeDutyCycle(0)
-    time.sleep(0.1)
-    
+
+def do_braille_letter(ports):
+    i = 0
+    threads = []
+    for p in ports:
+        if(p):
+            # === Configure thread === #
+            # thread = threading.Thread(target=do_braille_letter, args=(PWMS[i], ANGLE))
+            # threads.append(thread)
+            # thread.start()
+            turn(PWMS[i], ANGLE)
+        i+=1
+
+    for thread in threads:
+        thread.join()
+
+    time.sleep(0.2)
+
+#-----------------------------------------------#
+#              BUTTONS FUNCTIONS                #
+#-----------------------------------------------#
+
+def pause_callback(channel):
+    global paused
+    print('Paused button clicked')
+    with lock:
+        paused = not paused   
+    print(f'Paused: {paused}')
+
+def back_word_callback(channel):
+    global index, back_word
+    with lock:
+        back_word = True
+        if index > 0:
+            index -= 1
+            print(f"Playing back word: {memory.words[index]}")
+        else:
+            print("You are in the first word")
+
+def raise_vel_callback(channel):
+    global time_delay
+    with lock:
+        if time_delay > TIMEMIN:
+            time_delay = time_delay - VEL_STEP
+            print(f"Velocity reduced: Time between words: {time_delay}s")
+        else:
+            time_delay = TIMEMIN
+            print('Max velocity already!')
+
+def reduce_vel_callback(channel):
+    global time_delay
+    with lock:
+        if time_delay < TIMEMAX:
+            time_delay = time_delay + VEL_STEP
+            print(f"Velocity reduced: Time between words: {time_delay}s")
+        else:
+            time_delay = TIMEMAX
+            print('Min velocity already!')
+
+# === Configure Interruptions === #
+try: 
+    print("Setting up button interrupts...")
+    GPIO.add_event_detect(REPLAY_WORD_BUTTON, GPIO.FALLING, callback=back_word_callback,  bouncetime=200)
+    GPIO.add_event_detect(RAISE_VEL_BUTTON,   GPIO.FALLING, callback=raise_vel_callback,  bouncetime=200)
+    GPIO.add_event_detect(REDUCE_VEL_BUTTON,  GPIO.FALLING, callback=reduce_vel_callback, bouncetime=200)
+    GPIO.add_event_detect(PAUSE_BUTTON,       GPIO.FALLING, callback=pause_callback,      bouncetime=200)
+
+except Exception as e:
+    print('Erro when setting up button interrupts ' + str(e))
+
 #-----------------------------------------------#
 #                AUDIO FUNCTIONS                #
 #-----------------------------------------------#   
 
-def speak_offline(txt):
-    # This function is only for tests, 
-    # it is actually not used
-
-    engine = pyttsx3.init()
-    engine.say(txt)
-    engine.runAndWait()
-
-def speak_online(txt,folder):
+def speak_online(txt, folder):
     if(txt == ''):
         return 
     
@@ -365,7 +440,7 @@ def speak_online(txt,folder):
     file_path = f"{folder}/output{txt.upper()}.mp3"
     print("Trying to load:", file_path)
     try:
-        volume = pot.value  # Read potentiometer value (0.0 - 1.0)
+        volume = get_volume() # (0.0 - 1.0)
         pygame.mixer.music.set_volume(volume)  # Set volume
         print(f"Potentiometer volume: {volume:.2f}")
 
@@ -396,10 +471,7 @@ def clean_word(word):
 
 def create_mp3_words(words, folder):
     for word in words:
-        if( len(word) > 1):
-            if not word:
-                continue
-           
+        if word and len(word) > 1:
             try:
                 tts = gTTS(text=word, lang="pt")
                 word = clean_word(word)
@@ -410,9 +482,7 @@ def create_mp3_words(words, folder):
 
 def destroy_mp3_words(words, folder):
     for word in words:
-        if( len(word) > 1):
-            if not word:
-                continue
+        if word and len(word) > 1:
 
             word = clean_word(word)
             try:
@@ -422,59 +492,29 @@ def destroy_mp3_words(words, folder):
             except Exception as e:
                 print(f"Error: {str(e)}")
 
+def start_conversion(bus):
+    # Start convertion in A0 canal (single-shot)
+    config = [
+        0b11000010,  # MSB: 1=start single-shot, MUX=A0, PGA=±4.096V, mode=single-shot
+        0b11100011   # LSB: 860SPS, comparador desativado
+    ]
+    bus.write_i2c_block_data(ADDRESS, POINTER_CONFIG, config)
 
-#-----------------------------------------------#
-#              BUTTONS FUNCTIONS                #
-#-----------------------------------------------#
+def read_conversion(bus):
+    # Wait time conversion (~1ms to 860SPS)
+    time.sleep(0.0015)
+    raw = bus.read_i2c_block_data(ADDRESS, POINTER_CONVERSION, 2)
+    value = (raw[0] << 8) | raw[1]
+    if value > 0x7FFF:
+        value -= 0x10000
+    return value
 
-def buttons_response(time, i):
-    step = 0.05
-    elapsed = 0
-    clicked = False
-    response = [time, i, False]
-    while elapsed < SLEEP_DURATION and not clicked:
-        time.sleep(step)
-        response = verify_buttons(time)
-        clicked = response[2]
-        elapsed += step
-
-    # time = response[0]
-    # i = response[1]
-    # return [time, i]
-
-    return [response[0],response[1]]
-
-def verify_buttons(time, i):
-    clicked = True
-    if GPIO.input(BUTTON_PAUSE) == GPIO.HIGH:
-        pause()
-    elif GPIO.input(BUTTON_RAISE_VEL) == GPIO.HIGH:
-        time = raise_vel(time)
-    elif GPIO.input(BUTTON_REDUCE_VEL) == GPIO.HIGH:
-        time = reduce_vel(time)
-    elif GPIO.input(BUTTON_REPLAY_WORD) == GPIO.HIGH:
-        i -=2
-    else:
-        clicked = False
-
-    return [time,i,clicked]
-
-def raise_vel(time):
-    if time - VELPAR > VELMIN:
-        return time - VELPAR
-    return VELMIN
-
-def reduce_vel(time):
-    if time + VELPAR < VELMAX:
-        return time + VELPAR
-    return VELMAX
-
-def pause():
-    time.sleep(0.5)
-    on = True
-    while on:
-        if GPIO.input(BUTTON_PAUSE) == GPIO.HIGH:
-            on = False
+def get_volume():
+    with SMBus(I2C_BUS) as bus:
+        start_conversion(bus)
+        value = read_conversion(bus)
+        time.sleep(0.1)
+    return value / 26368
 
 #-----------------------------------------------#
 #               BRAILLE FUNCTIONS               #
@@ -493,20 +533,6 @@ def words_to_braille(words):
 
 def translate_to_braille(c):
     return BRAILLE_ALPHA.get(c, [0, 0, 0, 0, 0, 0])
-
-def do_braille_letter(ports):
-    i = 0
-    for p in ports:
-        if(p):
-            turn(PWMS[i], ANGLE)
-        i+=1
-
-    time.sleep(0.3)  # Time to servo motor turn
-    i = 0
-    for p in ports:
-        if(p):
-            clean_pwm_duty(PWMS[i])
-        i+=1
 
 #-----------------------------------------------#
 #                 SERVER ROUTES                 #
@@ -535,53 +561,83 @@ def receive_text():
 @app.route('/run-text', methods=['POST'])
 def say_text():
     try:
-        pygame.mixer.init()
+        global time_delay, index, back_word, paused
         start_pwms()
 
         data = request.get_json()
-        t = data.get('time', 1) # Get the time between letters
+        time_delay = data.get('time', 1) # Get the time between letters
 
         words = memory.words
         size = len(words)
 
-        for i in range(0, size):
-            
-            word = words[i] 
+        while index < size:
+            back_word = False
+            while paused:
+                time.sleep(0.1)
+            if back_word:
+                continue
 
+            word = words[index] 
+
+            # Speak Word
             if(len(word) > 1):
                 speak_online(word, "words")
-                        
+
+            if back_word:
+                continue
+            while paused:
+                time.sleep(0.1)
+
+            # Speak each caracter     
             for c in word:
+
+                if back_word:
+                    break
+                while paused:
+                    time.sleep(0.1)
+
                 reset_pwms()
 
                 if c in BAD_CARACTERS:
-                    speak_online(BAD_CARACTERS[c], "letters")
+                    # thread_audio = threading.Thread(target=speak_online, args=(BAD_CARACTERS[c], "letters"), daemon=True)
+                    # thread_audio.start()
+                    speak_online(BAD_CARACTERS[c], 'letters')
                 else:
-                    speak_online(c, 'letters')
+                    # thread_audio = threading.Thread(target=speak_online, args=( BAD_CARACTERS[c], "letters"), daemon=True)
+                    # thread_audio.start()
+                    speak_online(c,'letters')
 
                 braille_letter = translate_to_braille(c) 
                 do_braille_letter(braille_letter)
-                time.sleep(t)
-
-                # response = buttons_response(t, i) # Check buttons
-                # t = response[0]
-                # if response[1] < i: # 
-                #    i = response[1]
-                #    break
-                
+                time.sleep(time_delay)
+            
+            if back_word:
+                continue
+            while paused:
+                time.sleep(0.1)
+            index+=1
 
         return "Runned!", 200
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+        return "Error", 500
     except Exception as e:
         print(f"Error aa: {str(e)}")
         return "Error", 500
     finally:
         print('Cleaning stuff')
-        pygame.quit()
         stop_pwms()
-        GPIO.cleanup()
-        destroy_mp3_words(memory.words, 'words')
     
 #=====================================================================================#
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)  # Ensure port matches PI_PORT in app.py
+    try:
+        app.run(host='0.0.0.0', port=5000)  # Ensure port matches PI_PORT in app.py
+    except Exception as e:
+        print(f"Ocurred an error when trying to run server: {str(e)}")
+    finally:
+        pygame.quit()
+        destroy_mp3_words(memory.words, 'words')
+        GPIO.cleanup()
+
+
