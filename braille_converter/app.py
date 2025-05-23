@@ -44,6 +44,8 @@ PI_ENDPOINT = f"http://{PI_IP}:{PI_PORT}/"
 PI_ROUTE_TEXT = "receive-text"
 PI_ROUTE_RUN = "run-text"
 
+my_files = []
+
 def extract_text_from_file(file_path, extension):
     if extension == 'txt':
         with open(file_path, 'r') as f:
@@ -65,12 +67,13 @@ def extract_text_from_file(file_path, extension):
 def create_txt_file(file_path, text, folder):
     try:
         path = f"{folder}/{file_path}"
-        file = open(path, "x")
+        my_files.append(path)
 
+        file = open(path, "x")
         for letter in text:
             file.write(letter)
-            
         file.close()
+
         print(f"File '{file_path}' created successfully.")
     except FileExistsError:
         print(f"File '{file_path}' already exists.")
@@ -97,11 +100,18 @@ def create_text_audio(text):
     except  Exception as e:
         print(f'Error when trying to create text audio: \n {str(e)}')
 
-def destoy_text_audio():
+def destroy_text_audio():
     try:
         os.remove("static/outputTEXT.mp3")
     except Exception as e:
         print(f'Error when trying to destroy text audio: \n {str(e)}')
+
+def destroy_my_files():
+    for file in my_files:
+        try:
+            os.remove(file)
+        except:
+            print(f"Error: Could not remove {file}")
 
 @app.route('/')
 def index():
@@ -172,8 +182,14 @@ def run_text():
         
     except Exception as e:
         return render_template('index.html', message2=f"Error: {str(e)}")
-    finally:
-        destoy_text_audio()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    try:
+        app.run(host='0.0.0.0', port=8000)
+    except Exception as e:
+        print(f"Ocurred an error when trying to run server: {str(e)}")
+    finally:
+        destroy_text_audio()
+        destroy_my_files()
+
+

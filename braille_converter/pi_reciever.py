@@ -637,9 +637,6 @@ if __name__ == '__main__':
         pygame.quit()
         destroy_mp3_words(memory.words, 'words')
         GPIO.cleanup()
-        try:
-            os.remove("files/my_*")
-        except:
-            print("Error when trying to remove created files")
+
 
 
