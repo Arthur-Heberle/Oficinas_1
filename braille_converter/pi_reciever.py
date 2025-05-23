@@ -18,7 +18,6 @@
 
 from flask import Flask, request
 import threading
-# import pyttsx3
 import RPi.GPIO as GPIO
 from smbus2 import SMBus
 import time,os
@@ -54,7 +53,6 @@ BUTTONS = [RAISE_VEL_BUTTON, REDUCE_VEL_BUTTON,
 I2C_BUS = 1
 ADDRESS = 0x48  # Endereço do ADS1115
 
-# Ponteiros de registrador
 POINTER_CONVERSION = 0x00
 POINTER_CONFIG     = 0x01
 
@@ -62,14 +60,12 @@ POINTER_CONFIG     = 0x01
 #              SETUP CONFIGURATION              #
 #-----------------------------------------------#
 
-lock = threading.Lock()   # This is responsible to use 
-index = 0                 # interruption in the buttons
-time_delay = 0.5                # and to play the words
+# To use interruption in buttons 
+lock = threading.Lock()   
+index = 0                 
+time_delay = 0.5        
 paused = False
 back_word = False
-
-pygame.init()
-pygame.mixer.init()
 
 GPIO.setmode(GPIO.BCM)       
 GPIO.setwarnings(False)
@@ -77,7 +73,7 @@ GPIO.setwarnings(False)
 for pin in PINS:
     GPIO.setup(pin, GPIO.OUT)
 
-PWMS = [GPIO.PWM(pin, 50) for pin in PINS]  # Create PWM instance with 50Hz (typical for servos)
+PWMS = [GPIO.PWM(pin, 50) for pin in PINS] 
 
 for button in BUTTONS:
     GPIO.setup(button, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -326,11 +322,16 @@ BAD_CARACTERS = {
 
 app = Flask(__name__)
 
+# To save the text in memory
 class AppMemory:
     def __init__(self):
         self.text = None
         self.words = []
 memory = AppMemory()
+
+pygame.init()
+pygame.mixer.init()
+
 
 #-----------------------------------------------#
 #               PINS FUNCTIONS                  #
@@ -351,35 +352,33 @@ def stop_pwms():
 def reset_pwms():
     for pwm in PWMS:
         turn (pwm,0)
-        time.sleep(0.1)
+        time.sleep(0.25)
 
 def turn(pwm, angle):
     duty = 2 + (angle / 18)
     pwm.ChangeDutyCycle(duty)
-    time.sleep(0.2)  # Time to servo motor turn
+    time.sleep(0.25)  # Time to servo motor turn
     pwm.ChangeDutyCycle(0)
 
 def do_braille_letter(ports):
     i = 0
-    threads = []
     for p in ports:
         if(p):
-            # === Configure thread === #
-            # thread = threading.Thread(target=do_braille_letter, args=(PWMS[i], ANGLE))
-            # threads.append(thread)
-            # thread.start()
             turn(PWMS[i], ANGLE)
         i+=1
-
-    for thread in threads:
-        thread.join()
-
-    time.sleep(0.2)
 
 #-----------------------------------------------#
 #              BUTTONS FUNCTIONS                #
 #-----------------------------------------------#
 
+def check_buttons():
+    while paused:
+        time.sleep(0.1)
+    if back_word:
+        return True
+    else:
+        return False
+    
 def pause_callback(channel):
     global paused
     print('Paused button clicked')
@@ -401,21 +400,23 @@ def raise_vel_callback(channel):
     global time_delay
     with lock:
         if time_delay > TIMEMIN:
-            time_delay = time_delay - VEL_STEP
-            print(f"Velocity reduced: Time between words: {time_delay}s")
+            time_delay -= VEL_STEP
+            print(f"Velocity Raised")
         else:
             time_delay = TIMEMIN
             print('Max velocity already!')
+        print(f"Time between words: {time_delay}s")
 
 def reduce_vel_callback(channel):
     global time_delay
     with lock:
         if time_delay < TIMEMAX:
-            time_delay = time_delay + VEL_STEP
-            print(f"Velocity reduced: Time between words: {time_delay}s")
+            time_delay += VEL_STEP
+            print(f"Velocity Reduced")
         else:
             time_delay = TIMEMAX
             print('Min velocity already!')
+        print(f"Time between words: {time_delay}s")
 
 # === Configure Interruptions === #
 try: 
@@ -424,7 +425,6 @@ try:
     GPIO.add_event_detect(RAISE_VEL_BUTTON,   GPIO.FALLING, callback=raise_vel_callback,  bouncetime=200)
     GPIO.add_event_detect(REDUCE_VEL_BUTTON,  GPIO.FALLING, callback=reduce_vel_callback, bouncetime=200)
     GPIO.add_event_detect(PAUSE_BUTTON,       GPIO.FALLING, callback=pause_callback,      bouncetime=200)
-
 except Exception as e:
     print('Erro when setting up button interrupts ' + str(e))
 
@@ -440,6 +440,7 @@ def speak_online(txt, folder):
     file_path = f"{folder}/output{txt.upper()}.mp3"
     print("Trying to load:", file_path)
     try:
+
         volume = get_volume() # (0.0 - 1.0)
         pygame.mixer.music.set_volume(volume)  # Set volume
         print(f"Potentiometer volume: {volume:.2f}")
@@ -461,9 +462,9 @@ def clean_word(word):
     if(len(word)>1):
         try:    
             for carac in BAD_CARACTERS:
-                if(carac in word):
-                    if(carac == word[-1]):
-                        word = word.replace(carac, '')
+                if(carac in word) and carac == word[-1]:
+                    word = word.replace(carac, '')
+
         except Exception as e:
             print(f"Error: {str(e)}")
         
@@ -514,7 +515,7 @@ def get_volume():
         start_conversion(bus)
         value = read_conversion(bus)
         time.sleep(0.1)
-    return value / 26368
+    return max( (value / 26368) , 1)
 
 #-----------------------------------------------#
 #               BRAILLE FUNCTIONS               #
@@ -547,7 +548,7 @@ def receive_text():
         print(f"Received text: {text}\n")
         print(f'Recieved words: {words}\n')
 
-        # Save text and words
+        # Save text and words to memory
         memory.text = text
         memory.words = words
         
@@ -565,57 +566,51 @@ def say_text():
         start_pwms()
 
         data = request.get_json()
-        time_delay = data.get('time', 1) # Get the time between letters
+        time_delay = data.get('time', 1)
 
         words = memory.words
         size = len(words)
 
         while index < size:
             back_word = False
-            while paused:
-                time.sleep(0.1)
-            if back_word:
+
+            # while paused:
+            #     time.sleep(0.1)
+            # if back_word:
+            #     continue
+
+            if check_buttons():
                 continue
-
+            
             word = words[index] 
-
-            # Speak Word
+            # Speak word
             if(len(word) > 1):
                 speak_online(word, "words")
 
-            if back_word:
+            if check_buttons():
                 continue
-            while paused:
-                time.sleep(0.1)
 
             # Speak each caracter     
             for c in word:
 
-                if back_word:
-                    break
-                while paused:
-                    time.sleep(0.1)
+                if check_buttons():
+                    continue
 
                 reset_pwms()
 
                 if c in BAD_CARACTERS:
-                    # thread_audio = threading.Thread(target=speak_online, args=(BAD_CARACTERS[c], "letters"), daemon=True)
-                    # thread_audio.start()
                     speak_online(BAD_CARACTERS[c], 'letters')
                 else:
-                    # thread_audio = threading.Thread(target=speak_online, args=( BAD_CARACTERS[c], "letters"), daemon=True)
-                    # thread_audio.start()
                     speak_online(c,'letters')
 
                 braille_letter = translate_to_braille(c) 
                 do_braille_letter(braille_letter)
                 time.sleep(time_delay)
             
-            if back_word:
+            if check_buttons():
                 continue
-            while paused:
-                time.sleep(0.1)
-            index+=1
+
+            index += 1
 
         return "Runned!", 200
     except KeyboardInterrupt:
@@ -627,6 +622,9 @@ def say_text():
     finally:
         print('Cleaning stuff')
         stop_pwms()
+        index = 0
+        back_word = False
+        paused = False
     
 #=====================================================================================#
 
@@ -639,5 +637,9 @@ if __name__ == '__main__':
         pygame.quit()
         destroy_mp3_words(memory.words, 'words')
         GPIO.cleanup()
+        try:
+            os.remove("files/my_*")
+        except:
+            print("Error when trying to remove created files")
 
 
