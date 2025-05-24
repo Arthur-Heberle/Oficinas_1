@@ -593,7 +593,7 @@ def say_text():
             for c in word:
 
                 if check_buttons():
-                    continue
+                    break
 
                 reset_pwms()
 
