@@ -443,7 +443,9 @@ def speak_online(txt, folder):
         volume = get_volume() # (0.0 - 1.0)
         pygame.mixer.music.set_volume(volume)  # Set volume
         print(f"Potentiometer volume: {volume:.2f}")
-
+        if not os.path.exists(file_path):
+            print(f"❌ File does not exist: {file_path}")
+            return
         pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
         while pygame.mixer.music.get_busy():
@@ -469,16 +471,28 @@ def clean_word(word):
         
     return word
 
+# def create_mp3_words(words, folder):
+#     for word in words:
+#         if word and len(word) > 1:
+#             try:
+#                 tts = gTTS(text=word, lang="pt")
+#                 word = clean_word(word)
+#                 tts.save(f"{folder}/output{word.upper()}.mp3")
+#             except Exception as e: 
+#                 print(str(e))
+#                 continue
+
 def create_mp3_words(words, folder):
+    os.makedirs(folder, exist_ok=True)  # Ensure directory exists
     for word in words:
-        if word and len(word) > 1:
-            try:
-                tts = gTTS(text=word, lang="pt")
-                word = clean_word(word)
-                tts.save(f"{folder}/output{word.upper()}.mp3")
-            except Exception as e: 
-                print(str(e))
-                continue
+        try:
+            clean = clean_word(word)
+            tts = gTTS(text=word, lang="pt")
+            path = f"{folder}/output{clean.upper()}.mp3"
+            print(f"Saving to {path}")
+            tts.save(path)
+        except Exception as e: 
+            print(f"❌ Failed to save MP3 for '{word}': {e}")
 
 def destroy_mp3_words(words, folder):
     for word in words:
