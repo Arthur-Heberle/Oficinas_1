@@ -65,7 +65,7 @@ BUTTONS = [RAISE_VEL_BUTTON, REDUCE_VEL_BUTTON,
 # # To use interruption in buttons 
 # lock = threading.Lock()   
 index = 0                 
-time_delay = 0.5        
+time_delay = 0.3        
 # paused = False
 # back_word = False
 
@@ -349,10 +349,12 @@ def stop_pwms():
         pwm.stop()
         time.sleep(0.01)
 
-def reset_pwms():
-    for pwm in PWMS:
-        turn (pwm,0)
-        time.sleep(0.25)
+def reset_pwms(ports):
+    i = 0
+    for p in ports:
+        if(p):
+            turn(PWMS[i], 0)
+        i+=1
 
 def turn(pwm, angle):
     duty = 2 + (angle / 18)
@@ -535,14 +537,14 @@ def get_words(text):
             words.append(j)
     return words    
 
-def receive_text(words):
+def receive_text():
     try:
 
 
         # Save text and words to memory
         memory.words = get_words(extract_text_from_file('meu_arquivo', 'txt'))
         
-        create_mp3_words(words, "words")
+        # create_mp3_words(memory.words, "words")
 
         return "Text received", 200
     except Exception as e:
@@ -571,28 +573,28 @@ def say_text():
             
             word = words[index] 
             # Speak word
-            if(len(word) > 1):
-                speak_online(word, "words")
+            # if(len(word) > 1):
+            #     speak_online(word, "words")
 
             # if check_buttons():
             #     continue
-
+            reset_pwms()
             # Speak each caracter     
             for c in word:
 
                 # if check_buttons():
                 #     break
 
-                reset_pwms()
 
-                if c in BAD_CARACTERS:
-                    speak_online(BAD_CARACTERS[c], 'letters')
-                else:
-                    speak_online(c,'letters')
+                # if c in BAD_CARACTERS:
+                #     speak_online(BAD_CARACTERS[c], 'letters')
+                # else:
+                #     speak_online(c,'letters')
 
                 braille_letter = translate_to_braille(c) 
                 do_braille_letter(braille_letter)
                 time.sleep(time_delay)
+                reset_pwms()
             
             # if check_buttons():
             #     continue

@@ -332,7 +332,6 @@ memory = AppMemory()
 pygame.init()
 pygame.mixer.init()
 
-
 #-----------------------------------------------#
 #               PINS FUNCTIONS                  #
 #-----------------------------------------------#
@@ -352,12 +351,12 @@ def stop_pwms():
 def reset_pwms():
     for pwm in PWMS:
         turn (pwm,0)
-        time.sleep(0.25)
+        # time.sleep(0.25)
 
 def turn(pwm, angle):
-    duty = 2 + (angle / 18)
+    duty = 2.5 + (angle / 18.0)
     pwm.ChangeDutyCycle(duty)
-    time.sleep(0.25)  # Time to servo motor turn
+    time.sleep(0.4)  # Time to servo motor turn
     pwm.ChangeDutyCycle(0)
 
 def do_braille_letter(ports):
