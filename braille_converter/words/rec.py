@@ -523,12 +523,22 @@ def read_conversion(bus):
         value -= 0x10000
     return value
 
+# def get_volume():
+#     with SMBus(I2C_BUS) as bus:
+#         start_conversion(bus)
+#         value = read_conversion(bus)
+#         time.sleep(0.1)
+#     return max( (value / 26368) , 1)
+
 def get_volume():
     with SMBus(I2C_BUS) as bus:
         start_conversion(bus)
         value = read_conversion(bus)
         time.sleep(0.1)
-    return max( (value / 26368) , 1)
+
+    # Normaliza para o intervalo 0.0 - 1.0
+    normalized = (value + 32768) / 65535
+    return min(max(normalized, 0.0), 1.0) 
 
 #-----------------------------------------------#
 #               BRAILLE FUNCTIONS               #
