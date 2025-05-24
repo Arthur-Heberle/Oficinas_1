@@ -24,6 +24,8 @@ import time,os
 from gtts import gTTS
 import pygame
 from unidecode import unidecode
+from docx import Document
+import PyPDF2
 
 #-----------------------------------------------#
 #                  CONSTANTS                    #
@@ -50,22 +52,22 @@ BUTTONS = [RAISE_VEL_BUTTON, REDUCE_VEL_BUTTON,
            PAUSE_BUTTON, REPLAY_WORD_BUTTON ]
 
 # === Potenciometer Constants === #
-I2C_BUS = 1
-ADDRESS = 0x48  # Endereço do ADS1115
+# I2C_BUS = 1
+# ADDRESS = 0x48  # Endereço do ADS1115
 
-POINTER_CONVERSION = 0x00
-POINTER_CONFIG     = 0x01
+# POINTER_CONVERSION = 0x00
+# POINTER_CONFIG     = 0x01
 
 #-----------------------------------------------#
 #              SETUP CONFIGURATION              #
 #-----------------------------------------------#
 
-# To use interruption in buttons 
-lock = threading.Lock()   
+# # To use interruption in buttons 
+# lock = threading.Lock()   
 index = 0                 
 time_delay = 0.5        
-paused = False
-back_word = False
+# paused = False
+# back_word = False
 
 GPIO.setmode(GPIO.BCM)       
 GPIO.setwarnings(False)
@@ -320,8 +322,6 @@ BAD_CARACTERS = {
 #                INTRODUCTION                   #
 #-----------------------------------------------#
 
-app = Flask(__name__)
-
 # To save the text in memory
 class AppMemory:
     def __init__(self):
@@ -357,7 +357,7 @@ def reset_pwms():
 def turn(pwm, angle):
     duty = 2 + (angle / 18)
     pwm.ChangeDutyCycle(duty)
-    time.sleep(0.25)  # Time to servo motor turn
+    time.sleep(0.3)  # Time to servo motor turn
     pwm.ChangeDutyCycle(0)
 
 def do_braille_letter(ports):
@@ -371,62 +371,62 @@ def do_braille_letter(ports):
 #              BUTTONS FUNCTIONS                #
 #-----------------------------------------------#
 
-def check_buttons():
-    while paused:
-        time.sleep(0.1)
-    if back_word:
-        return True
-    else:
-        return False
+# def check_buttons():
+#     while paused:
+#         time.sleep(0.1)
+#     if back_word:
+#         return True
+#     else:
+#         return False
     
-def pause_callback(channel):
-    global paused
-    print('Paused button clicked')
-    with lock:
-        paused = not paused   
-    print(f'Paused: {paused}')
+# def pause_callback(channel):
+#     global paused
+#     print('Paused button clicked')
+#     with lock:
+#         paused = not paused   
+#     print(f'Paused: {paused}')
 
-def back_word_callback(channel):
-    global index, back_word
-    with lock:
-        back_word = True
-        if index > 0:
-            index -= 1
-            print(f"Playing back word: {memory.words[index]}")
-        else:
-            print("You are in the first word")
+# def back_word_callback(channel):
+#     global index, back_word
+#     with lock:
+#         back_word = True
+#         if index > 0:
+#             index -= 1
+#             print(f"Playing back word: {memory.words[index]}")
+#         else:
+#             print("You are in the first word")
 
-def raise_vel_callback(channel):
-    global time_delay
-    with lock:
-        if time_delay > TIMEMIN:
-            time_delay -= VEL_STEP
-            print(f"Velocity Raised")
-        else:
-            time_delay = TIMEMIN
-            print('Max velocity already!')
-        print(f"Time between words: {time_delay}s")
+# def raise_vel_callback(channel):
+#     global time_delay
+#     with lock:
+#         if time_delay > TIMEMIN:
+#             time_delay -= VEL_STEP
+#             print(f"Velocity Raised")
+#         else:
+#             time_delay = TIMEMIN
+#             print('Max velocity already!')
+#         print(f"Time between words: {time_delay}s")
 
-def reduce_vel_callback(channel):
-    global time_delay
-    with lock:
-        if time_delay < TIMEMAX:
-            time_delay += VEL_STEP
-            print(f"Velocity Reduced")
-        else:
-            time_delay = TIMEMAX
-            print('Min velocity already!')
-        print(f"Time between words: {time_delay}s")
+# def reduce_vel_callback(channel):
+#     global time_delay
+#     with lock:
+#         if time_delay < TIMEMAX:
+#             time_delay += VEL_STEP
+#             print(f"Velocity Reduced")
+#         else:
+#             time_delay = TIMEMAX
+#             print('Min velocity already!')
+#         print(f"Time between words: {time_delay}s")
 
-# === Configure Interruptions === #
-try: 
-    print("Setting up button interrupts...")
-    GPIO.add_event_detect(REPLAY_WORD_BUTTON, GPIO.FALLING, callback=back_word_callback,  bouncetime=200)
-    GPIO.add_event_detect(RAISE_VEL_BUTTON,   GPIO.FALLING, callback=raise_vel_callback,  bouncetime=200)
-    GPIO.add_event_detect(REDUCE_VEL_BUTTON,  GPIO.FALLING, callback=reduce_vel_callback, bouncetime=200)
-    GPIO.add_event_detect(PAUSE_BUTTON,       GPIO.FALLING, callback=pause_callback,      bouncetime=200)
-except Exception as e:
-    print('Erro when setting up button interrupts ' + str(e))
+# # === Configure Interruptions === #
+# try: 
+#     print("Setting up button interrupts...")
+#     GPIO.add_event_detect(REPLAY_WORD_BUTTON, GPIO.FALLING, callback=back_word_callback,  bouncetime=200)
+#     GPIO.add_event_detect(RAISE_VEL_BUTTON,   GPIO.FALLING, callback=raise_vel_callback,  bouncetime=200)
+#     GPIO.add_event_detect(REDUCE_VEL_BUTTON,  GPIO.FALLING, callback=reduce_vel_callback, bouncetime=200)
+#     GPIO.add_event_detect(PAUSE_BUTTON,       GPIO.FALLING, callback=pause_callback,      bouncetime=200)
+# except Exception as e:
+#     print('Erro when setting up button interrupts ' + str(e))
 
 #-----------------------------------------------#
 #                AUDIO FUNCTIONS                #
@@ -441,9 +441,9 @@ def speak_online(txt, folder):
     print("Trying to load:", file_path)
     try:
 
-        volume = get_volume() # (0.0 - 1.0)
-        pygame.mixer.music.set_volume(volume)  # Set volume
-        print(f"Potentiometer volume: {volume:.2f}")
+        # volume = get_volume() # (0.0 - 1.0)
+        # pygame.mixer.music.set_volume(volume)  # Set volume
+        # print(f"Potentiometer volume: {volume:.2f}")
 
         pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
@@ -493,44 +493,9 @@ def destroy_mp3_words(words, folder):
             except Exception as e:
                 print(f"Error: {str(e)}")
 
-def start_conversion(bus):
-    # Start convertion in A0 canal (single-shot)
-    config = [
-        0b11000010,  # MSB: 1=start single-shot, MUX=A0, PGA=±4.096V, mode=single-shot
-        0b11100011   # LSB: 860SPS, comparador desativado
-    ]
-    bus.write_i2c_block_data(ADDRESS, POINTER_CONFIG, config)
-
-def read_conversion(bus):
-    # Wait time conversion (~1ms to 860SPS)
-    time.sleep(0.0015)
-    raw = bus.read_i2c_block_data(ADDRESS, POINTER_CONVERSION, 2)
-    value = (raw[0] << 8) | raw[1]
-    if value > 0x7FFF:
-        value -= 0x10000
-    return value
-
-def get_volume():
-    with SMBus(I2C_BUS) as bus:
-        start_conversion(bus)
-        value = read_conversion(bus)
-        time.sleep(0.1)
-    return max( (value / 26368) , 1)
-
 #-----------------------------------------------#
 #               BRAILLE FUNCTIONS               #
 #-----------------------------------------------#
-
-def words_to_braille(words):
-    # Used only if you want to translate the words to braille
-    # (not used in this file)
-    ports = []
-    for word in words:
-        for letter in word:
-            ports.append(translate_to_braille(letter))
-        ports.append([0,0,0,0,0,0])
-    
-    return ports
 
 def translate_to_braille(c):
     return BRAILLE_ALPHA.get(c, [0, 0, 0, 0, 0, 0])
@@ -539,18 +504,43 @@ def translate_to_braille(c):
 #                 SERVER ROUTES                 #
 #-----------------------------------------------#
 
-@app.route('/receive-text', methods=['POST'])
-def receive_text():
+def extract_text_from_file(file_path, extension):
+    if extension == 'txt':
+        with open(file_path, 'r') as f:
+            return f.read()
+    elif extension == 'docx':
+        doc = Document(file_path)
+        return '\n'.join([para.text for para in doc.paragraphs])
+    elif extension == 'pdf':
+        with open(file_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            text = ''.join([page.extract_text() for page in reader.pages])
+            tmp = ''
+            for word in text.split('\n'):
+                tmp += word
+            text = tmp            
+            return text
+    return ""
+
+def get_words(text):
+    lines = text.split('\n')
+    i =0 
+    aux = []
+    for line in lines:
+        aux.append(line.split(' '))
+        i+=1
+    words = []
+    for i in aux:
+        for j in i:
+            words.append(j)
+    return words    
+
+def receive_text(words):
     try:
-        data = request.get_json()
-        text = data.get('text', '')
-        words = data.get('words', '')
-        print(f"Received text: {text}\n")
-        print(f'Recieved words: {words}\n')
+
 
         # Save text and words to memory
-        memory.text = text
-        memory.words = words
+        memory.words = get_words(extract_text_from_file('meu_arquivo', 'txt'))
         
         create_mp3_words(words, "words")
 
@@ -559,14 +549,11 @@ def receive_text():
         print(f"Error aa: {str(e)}")
         return "Error", 500
 
-@app.route('/run-text', methods=['POST'])
 def say_text():
     try:
-        global time_delay, index, back_word, paused
+        # global time_delay, index, back_word, paused
+        global time_delay, index
         start_pwms()
-
-        data = request.get_json()
-        time_delay = data.get('time', 1)
 
         words = memory.words
         size = len(words)
@@ -579,22 +566,22 @@ def say_text():
             # if back_word:
             #     continue
 
-            if check_buttons():
-                continue
+            # if check_buttons():
+            #     continue
             
             word = words[index] 
             # Speak word
             if(len(word) > 1):
                 speak_online(word, "words")
 
-            if check_buttons():
-                continue
+            # if check_buttons():
+            #     continue
 
             # Speak each caracter     
             for c in word:
 
-                if check_buttons():
-                    continue
+                # if check_buttons():
+                #     break
 
                 reset_pwms()
 
@@ -607,8 +594,8 @@ def say_text():
                 do_braille_letter(braille_letter)
                 time.sleep(time_delay)
             
-            if check_buttons():
-                continue
+            # if check_buttons():
+            #     continue
 
             index += 1
 
@@ -622,20 +609,17 @@ def say_text():
     finally:
         print('Cleaning stuff')
         stop_pwms()
-        index = 0
-        back_word = False
-        paused = False
+
     
 #=====================================================================================#
 
 if __name__ == '__main__':
     try:
-        app.run(host='0.0.0.0', port=5000)  # Ensure port matches PI_PORT in app.py
+        receive_text(['ola', 'mundo!'])
     except Exception as e:
-        print(f"Ocurred an error {str(e)}")
+        print(f"Ocurred an error when trying to run server: {str(e)}")
     finally:
         pygame.quit()
-        destroy_mp3_words(memory.words, 'words')
         GPIO.cleanup()
 
 
