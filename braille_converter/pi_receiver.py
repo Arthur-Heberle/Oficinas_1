@@ -416,6 +416,34 @@ def reduce_vel_callback(channel):
             print('Min velocity already!')
         print(f"Time between words: {time_delay}s")
 
+def monitor_buttons():
+    global paused, back_word, time_delay, index
+    last_states = {b: GPIO.input(b) for b in BUTTONS}
+    while True:
+        for b in BUTTONS:
+            current = GPIO.input(b)
+            if current == GPIO.LOW and last_states[b] == GPIO.HIGH:
+                with lock:
+                    if b == PAUSE_BUTTON:
+                        paused = not paused
+                        print(f"[Button] Pause: {paused}")
+                    elif b == REPLAY_WORD_BUTTON:
+                        back_word = True
+                        index = max(index - 1, 0)
+                        if(index == 0):
+                            print(f"[Button] You are already in first word: {memory.words[index]}")
+                        else:
+                            print(f"[Button] Playback Word: {memory.words[index]}")
+                    elif b == RAISE_VEL_BUTTON:
+                        time_delay = max(TIMEMIN, time_delay - VEL_STEP)
+                        print(f"[Button] Velocity Raised: {time_delay:.2f}s")
+                    elif b == REDUCE_VEL_BUTTON:
+                        time_delay = min(TIMEMAX, time_delay + VEL_STEP)
+                        print(f"[Button] Velocity Reduced: {time_delay:.2f}s")
+            last_states[b] = current
+        time.sleep(0.05)
+
+
 # === Configure Interruptions === #
 try: 
     print("Setting up button interrupts...")
@@ -519,11 +547,7 @@ def get_volume():
             start_conversion(bus)
             value = read_conversion(bus)
             time.sleep(0.1)
-        v=(value+5930)/35500
-        print(v)
-        if(v<0):
-            v=0
-        return min(v, 1 )
+        return min( (value / 26368) , 1 )
     except Exception as e:
         print(f"[WARNING] I2C Volume Read Error: {e}")
         return 1.0
@@ -637,20 +661,24 @@ def say_text():
 
 if __name__ == '__main__':
     try:
-        print("[INFO] Iniciando servidor Flask em thread")
+        print("[INFO] Starting flask server using thread")
         server_thread = threading.Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": 5000})
         server_thread.daemon = True
         server_thread.start()
-        #app.run(host='0.0.0.0', port=5000)
-        # Mantém o processo vivo para escutar os botões
+
+        button_thread = threading.Thread(target=monitor_buttons)
+        button_thread.daemon = True
+        button_thread.start()
+
         while True:
             time.sleep(1)
 
     except Exception as e:
-        print(f"[ERROR] Ocorreu um erro: {str(e)}")
+        print(f"[ERROR] Ocurred and error: {str(e)}")
     finally:
-        print("[INFO] Encerrando Edubra")
+        print("[INFO] Closing program...")
         pygame.quit()
+        reset_pwms()
         destroy_mp3_words(memory.words, 'words')
         GPIO.cleanup()
 
