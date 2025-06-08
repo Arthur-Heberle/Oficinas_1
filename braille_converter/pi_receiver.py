@@ -30,7 +30,7 @@ from unidecode import unidecode
 #-----------------------------------------------#
 
 VEL_STEP = 0.10
-TIMEMIN = 0.1
+TIMEMIN = 0.01
 TIMEMAX = 3
 ANGLE = 45
 
@@ -340,8 +340,7 @@ def start_pwms():
     for pwm in PWMS:
         pwm.start(0)
         time.sleep(0.01)
-        turn(pwm,0)
-        #time.sleep(0.1)
+        turn(pwm, 0)
 
 def stop_pwms():
     for pwm in PWMS:
@@ -352,14 +351,12 @@ def stop_pwms():
 def reset_pwms():
     for pwm in PWMS:
         turn (pwm,0)
-        # time.sleep(0.25)
 
 def turn(pwm, angle):
     duty = 2.5 + (angle / 18.0)
     pwm.ChangeDutyCycle(duty)
     time.sleep(0.2)  # Time to servo motor turn
     pwm.ChangeDutyCycle(0)
-    #time.sleep(0.1)
 
 def do_braille_letter(ports):
     i = 0
@@ -371,6 +368,14 @@ def do_braille_letter(ports):
 #-----------------------------------------------#
 #              BUTTONS FUNCTIONS                #
 #-----------------------------------------------#
+
+def check_buttons():
+    while paused:
+        time.sleep(0.1)
+    if back_word:
+        return True
+    else:
+        return False
     
 def pause_callback(channel):
     global paused
@@ -392,7 +397,7 @@ def back_word_callback(channel):
 def raise_vel_callback(channel):
     global time_delay
     with lock:
-        if time_delay > TIMEMIN:
+        if time_delay - VEL_STEP >= TIMEMIN:
             time_delay -= VEL_STEP
             print(f"Velocity Raised")
         else:
@@ -403,7 +408,7 @@ def raise_vel_callback(channel):
 def reduce_vel_callback(channel):
     global time_delay
     with lock:
-        if time_delay < TIMEMAX:
+        if time_delay + VEL_STEP < TIMEMAX:
             time_delay += VEL_STEP
             print(f"Velocity Reduced")
         else:
@@ -434,13 +439,14 @@ def speak_online(txt, folder):
     print("Trying to load:", file_path)
     try:
         try:
-            volume = get_volume() # (0.0 - 1.0)
-            #pygame.mixer.music.set_volume(volume)  # Set volume
-        except Exception as e:
-            print('Error:',str(e))
-            volume = 1
+            volume  = get_volume() # (0.0 - 1.0)
+        except:
+            volume = 1.0
+            print("Could not read potenciometer")
+
+        pygame.mixer.music.set_volume(volume)  # Set volume
         print(f"Potentiometer volume: {volume:.2f}")
-        pygame.mixer.music.set_volume(volume) # Set volume
+
         pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
         while pygame.mixer.music.get_busy():
@@ -507,11 +513,16 @@ def read_conversion(bus):
     return value
 
 def get_volume():
-    with SMBus(I2C_BUS) as bus:
-        start_conversion(bus)
-        value = read_conversion(bus)
-        time.sleep(0.1)
-    return min( (value / 26368) , 1)
+    try:
+
+        with SMBus(I2C_BUS) as bus:
+            start_conversion(bus)
+            value = read_conversion(bus)
+            time.sleep(0.1)
+        return min( (value / 26368) , 1 )
+    except Exception as e:
+        print(f"[WARNING] I2C Volume Read Error: {e}")
+        return 1.0
 
 #-----------------------------------------------#
 #               BRAILLE FUNCTIONS               #
@@ -569,31 +580,22 @@ def say_text():
 
         while index < size:
             back_word = False
-            reset_pwms()
-            while paused:
-                time.sleep(0.1)
-            if back_word:
-                continue
 
-            #if check_buttons():
-            #    continue
+            if check_buttons():
+                continue
             
             word = words[index] 
             # Speak word
             if(len(word) > 1):
                 speak_online(word, "words")
 
-            while paused:
-                time.sleep(0.1)
-            if back_word:
+            if check_buttons():
                 continue
 
             # Speak each caracter     
             for c in word:
 
-                while paused:
-                    time.sleep(0.1)
-                if back_word:
+                if check_buttons():
                     break
 
                 reset_pwms()
@@ -607,10 +609,9 @@ def say_text():
                 do_braille_letter(braille_letter)
                 time.sleep(time_delay)
             
-            while paused:
-                time.sleep(0.1)
-            if back_word:
+            if check_buttons():
                 continue
+
             index += 1
 
         return "Runned!", 200
@@ -622,6 +623,7 @@ def say_text():
         return "Error", 500
     finally:
         print('Cleaning stuff')
+        reset_pwms()
         stop_pwms()
         index = 0
         back_word = False
@@ -631,10 +633,19 @@ def say_text():
 
 if __name__ == '__main__':
     try:
-        app.run(host='0.0.0.0', port=5000)  # Ensure port matches PI_PORT in app.py
+        print("[INFO] Iniciando servidor Flask em thread")
+        server_thread = threading.Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": 5000})
+        server_thread.daemon = True
+        server_thread.start()
+
+        # Mantém o processo vivo para escutar os botões
+        while True:
+            time.sleep(1)
+
     except Exception as e:
-        print(f"Ocurred an error {str(e)}")
+        print(f"[ERROR] Ocorreu um erro: {str(e)}")
     finally:
+        print("[INFO] Encerrando Edubra")
         pygame.quit()
         destroy_mp3_words(memory.words, 'words')
         GPIO.cleanup()
