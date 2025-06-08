@@ -547,7 +547,11 @@ def get_volume():
             start_conversion(bus)
             value = read_conversion(bus)
             time.sleep(0.1)
-        return min( (value / 26368) , 1 )
+            value += 5910
+            if value < 0:
+                value = 0
+            
+        return min( (value / 3550) , 1 )
     except Exception as e:
         print(f"[WARNING] I2C Volume Read Error: {e}")
         return 1.0
