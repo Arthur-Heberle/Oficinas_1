@@ -32,7 +32,7 @@ from unidecode import unidecode
 VEL_STEP = 0.10
 TIMEMIN = 0.01
 TIMEMAX = 3
-ANGLE = 45
+ANGLE = 5
 
 PIN1 = 18
 PIN2 = 23
@@ -361,6 +361,12 @@ def turn(pwm, angle):
 def do_braille_letter(ports):
     i = 0
     for p in ports:
+        if i == 0:
+            print("[ ")
+        if i%2 == 1:
+            print("]\n[ ")
+        
+        print(f"{p} ")
         if(p):
             turn(PWMS[i], ANGLE)
         i+=1
@@ -547,11 +553,10 @@ def get_volume():
             start_conversion(bus)
             value = read_conversion(bus)
             time.sleep(0.1)
-            value += 5910
-            if value < 0:
+
+            if value < 10:
                 value = 0
-            
-        return min( (value / 3550) , 1 )
+        return min( (value / 26365) , 1 )
     except Exception as e:
         print(f"[WARNING] I2C Volume Read Error: {e}")
         return 1.0
