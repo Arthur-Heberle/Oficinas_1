@@ -29,17 +29,23 @@ from unidecode import unidecode
 #                  CONSTANTS                    #
 #-----------------------------------------------#
 
-VEL_STEP = 0.10
-TIMEMIN = 0.01
+VEL_STEP = 0.05
+TIMEMIN = 0.00
 TIMEMAX = 3
-ANGLE = 5
-
+ANGLE1 = 10
+ANGLE2 = 10
+ANGLE3 = 10
+ANGLE4 = 10
+ANGLE5 = 10
+ANGLE6 = 10
+    
 PIN1 = 18
 PIN2 = 23
-PIN3 = 24
-PIN4 = 25
+PIN3 = 14
+PIN4 = 1
 PIN5 = 12
-PIN6 = 13
+PIN6 = 21
+
 PINS = [PIN1, PIN2, PIN3, PIN4, PIN5, PIN6]
 
 RAISE_VEL_BUTTON = 22
@@ -189,39 +195,39 @@ BRAILLE_ALPHA = {
         
     '1': [1 , 0,
           0 , 0,
-          0 , 1],
+          0 , 0],
         
     '2': [1 , 0,
           1 , 0,
-          0 , 1],
+          0 , 0],
         
     '3': [1 , 1,
           0 , 0,
-          0 , 1],
+          0 , 0],
         
     '4': [1 , 1,
           0 , 1,
-          0 , 1],
+          0 , 0],
         
     '5': [1 , 0,
           0 , 1,
-          0 , 1],
+          0 , 0],
         
     '6': [1 , 1,
           1 , 0,
-          0 , 1],
+          0 , 0],
         
     '7': [1 , 1,
           1 , 1,
-          0 , 1],
+          0 , 0],
         
     '8': [1 , 0,
           1 , 1,
-          0 , 1],
+          0 , 0],
         
     '9': [0 , 1,
           1 , 0,
-          0 , 1],
+          0 , 0],
     
     '.': [0 , 0,
           1 , 1, 
@@ -316,6 +322,16 @@ BAD_CARACTERS = {
                 ':': 'DOIS PONTOS', '\\' : 'BARRA', '*' : 'ASTERISCO', '/' : 'BARRA', "'": 'ASPAS SIMPLES',
                 '"' : 'ASPAS DUPLAS', ',': 'VIRRGULA', ';' : 'PONTO E VIRGULA', '.' : 'PONTO', '(' : 'ABRE PARENTES', ')' : 'FECHA PARENTES', '[' : 'ABRE CHAVES', ']': 'FECHA CHAVES', '?' : 'PONTO DE INTERROGAÇÃO', '!' : 'PONTO DE EXCLAMAÇÃO', '<' : 'MENOR QUE', '>': 'MAIOR QUE', '{':'ABRE COLCHETES', '}': 'FECHA COLCHETES'}
 
+NUMBERS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+BEFORE_NUMBER = [0 , 1,
+                 0 , 1,
+                 1 , 1],
+
+BEFORE_UPPER = [0 , 1,
+                0 , 0,
+                0 , 1],
+
 #-----------------------------------------------#
 #                INTRODUCTION                   #
 #-----------------------------------------------#
@@ -328,6 +344,8 @@ class AppMemory:
         self.text = None
         self.words = []
 memory = AppMemory()
+
+
 
 pygame.init()
 pygame.mixer.init()
@@ -361,14 +379,25 @@ def turn(pwm, angle):
 def do_braille_letter(ports):
     i = 0
     for p in ports:
-        if i == 0:
-            print("[ ")
-        if i%2 == 1:
-            print("]\n[ ")
-        
-        print(f"{p} ")
+        if i % 2 == 0:
+            print(f"[ {p} , ", end = "" )
+        if i % 2 == 1:
+            print(f"{p} ]\n")     
         if(p):
-            turn(PWMS[i], ANGLE)
+            match i:
+                case 0:
+                    turn(PWMS[i], ANGLE1)
+                case 1:
+                    turn(PWMS[i], ANGLE2)
+                case 2:
+                    turn(PWMS[i], ANGLE3)
+                case 3:
+                    turn(PWMS[i], ANGLE4)
+                case 4:
+                    turn(PWMS[i], ANGLE5)
+                case 5:
+                    turn(PWMS[i], ANGLE6)
+            
         i+=1
 
 #-----------------------------------------------#
@@ -435,17 +464,26 @@ def monitor_buttons():
                         print(f"[Button] Pause: {paused}")
                     elif b == REPLAY_WORD_BUTTON:
                         back_word = True
-                        index = max(index - 1, 0)
                         if(index == 0):
-                            print(f"[Button] You are already in first word: {memory.words[index]}")
+                            print(f"[Button] You are already in first word!")
                         else:
-                            print(f"[Button] Playback Word: {memory.words[index]}")
+                            print(f"[Button] Playback Word: {memory.words[index-1]}")
+                        index = max(index - 1, 0)
                     elif b == RAISE_VEL_BUTTON:
-                        time_delay = max(TIMEMIN, time_delay - VEL_STEP)
-                        print(f"[Button] Velocity Raised: {time_delay:.2f}s")
+                        if time_delay - VEL_STEP >= TIMEMIN:
+                            time_delay = max(TIMEMIN, time_delay - VEL_STEP)
+                            print(f"[Button] Velocity Raised: {time_delay:.2f}s")
+                        else:
+                            time_delay = TIMEMIN
+                            print(f"[Button] Velocity Max Already! {time_delay:.2f}")
                     elif b == REDUCE_VEL_BUTTON:
-                        time_delay = min(TIMEMAX, time_delay + VEL_STEP)
-                        print(f"[Button] Velocity Reduced: {time_delay:.2f}s")
+                        if time_delay + VEL_STEP <= TIMEMAX:
+                            time_delay = min(TIMEMAX, time_delay + VEL_STEP)
+                            print(f"[Button] Velocity Reduced: {time_delay:.2f}s")
+                        else:
+                            time_delay = TIMEMAX
+                            print(f"[Button] Velocity Min Already! {time_delay:.2f}")
+                    
             last_states[b] = current
         time.sleep(0.05)
 
@@ -510,6 +548,9 @@ def create_mp3_words(words, folder):
     for word in words:
         if word and len(word) > 1:
             try:
+                if(f"{folder}/output{clean_word(word).upper()}.mp3" in os.listdir(folder)):
+                    print(f"File already exists: {folder}/output{clean_word(word).upper()}.mp3")
+                    continue
                 tts = gTTS(text=word, lang="pt")
                 word = clean_word(word)
                 tts.save(f"{folder}/output{word.upper()}.mp3")
@@ -607,7 +648,6 @@ def receive_text():
 def say_text():
     try:
         global time_delay, index, back_word, paused
-        start_pwms()
 
         data = request.get_json()
         time_delay = data.get('time', 1)
@@ -628,7 +668,11 @@ def say_text():
 
             if check_buttons():
                 continue
-
+            
+            if word[0] in NUMBERS:
+                speak_online('NUMERO', 'letters')
+                do_braille_letter(BEFORE_NUMBER)
+            
             # Speak each caracter     
             for c in word:
 
@@ -640,6 +684,9 @@ def say_text():
                 if c in BAD_CARACTERS:
                     speak_online(BAD_CARACTERS[c], 'letters')
                 else:
+                    if c.isupper():
+                        speak_online('MAIUSCULO', 'letters')
+                        do_braille_letter(BEFORE_UPPER)
                     speak_online(c,'letters')
 
                 braille_letter = translate_to_braille(c) 
@@ -661,7 +708,6 @@ def say_text():
     finally:
         print('Cleaning stuff')
         reset_pwms()
-        stop_pwms()
         index = 0
         back_word = False
         paused = False
@@ -670,6 +716,7 @@ def say_text():
 
 if __name__ == '__main__':
     try:
+        start_pwms()
         print("[INFO] Starting flask server using thread")
         server_thread = threading.Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": 5000})
         server_thread.daemon = True
