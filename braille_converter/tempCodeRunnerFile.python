@@ -1,0 +1,6 @@
+from gtts import gTTS
+
+tts = gTTS(text='número', lang='pt')
+tts.save('letters/NUMERO.mp3')
+tts = gTTS(text='MAIÙSCULO', lang='pt')
+tts.save('letters/MAIUSCULO.mp3')
