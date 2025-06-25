@@ -670,7 +670,11 @@ def say_text():
                 continue
             
             if word[0] in NUMBERS:
-                speak_online('NUMERO', 'letters')
+                pygame.mixer.music.load('letters/MAIUSCULO.mp3')
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    continue
+                
                 do_braille_letter(BEFORE_NUMBER)
             
             # Speak each caracter     
@@ -685,8 +689,13 @@ def say_text():
                     speak_online(BAD_CARACTERS[c], 'letters')
                 else:
                     if c.isupper():
-                        speak_online('MAIUSCULO', 'letters')
+                        pygame.mixer.music.load('letters/MAIUSCULO.mp3')
+                        pygame.mixer.music.play()
+                        while pygame.mixer.music.get_busy():
+                            continue
+
                         do_braille_letter(BEFORE_UPPER)
+
                     speak_online(c,'letters')
 
                 braille_letter = translate_to_braille(c) 
